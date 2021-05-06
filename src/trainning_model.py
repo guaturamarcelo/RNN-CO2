@@ -84,7 +84,7 @@ scaler.fit(dataset)
 datascaled = scaler.transform(dataset)
 datascaled = pd.DataFrame(datascaled, columns=dataset.columns)
 #datascaled
-#
+
 n = len(datascaled)
 train = datascaled[0:int(n*0.8)]
 valid = datascaled[int(n*0.8):int(n*0.95)]
