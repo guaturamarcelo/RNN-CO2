@@ -1,7 +1,6 @@
 # %%
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error
 import warnings
 from sklearn.preprocessing import MinMaxScaler
 import random
@@ -21,7 +20,7 @@ warnings.filterwarnings("ignore")
 pd.options.display.max_rows = 20
 
 # %%
-dataset = pd.read_table("/Users/marceloguatura/Documents/projetos/RNN_CO2/data/Marg_Tiete_Pte_Remedios_pmed.TXT", sep=";")
+dataset = pd.read_table("../data/Marg_Tiete_Pte_Remedios_pmed.TXT", sep=";")
 
 # 'RADG', 'RADUV', 'UR', 'DV', 'YEAR' * Outras
 headers = ['CO', 'HOUR', 'DWEEK', 'YDAY', 'YWEEK', 'NO', 'NO2',
@@ -33,11 +32,9 @@ dataset['DATE_TIME'] = pd.to_datetime(dataset['DATE_TIME'])
 dataset['DATE_TIME'] = dataset['DATE_TIME'].values.astype(np.int64) // 10 ** 9
 dataset.set_index('DATE_TIME', inplace=True)
 dataset.drop(['DATA', 'HOUR2'], axis=1, inplace=True)
-#dataset = dataset.tail(10000)
+#dataset = dataset.tail(20000)
 #print("DATASET DESCRIBE:\n")
 #print(dataset.describe().transpose(),"\n")
-
-
 
 
 # %%
@@ -47,6 +44,7 @@ dataset.drop(['DATA', 'HOUR2'], axis=1, inplace=True)
 #######################
 
 def preprocess(data):
+  # X
   for i, col in enumerate(data.columns):
     if i == 0:
       df = np.array(data[col])
@@ -55,10 +53,26 @@ def preprocess(data):
       val = np.array(data[col])
       val = val.reshape((len(data[col]), 1))
       df = np.hstack([df, val])
-    target = np.array(data[RATIO_TO_PREDICT])
-    target = target.reshape((len(target), 1))
-    return df, target
 
+  # Y
+#  if len(RATIO_TO_PREDICT) == 2:
+#    y_target = [RATIO_TO_PREDICT]
+#  else:
+#    y_target = RATIO_TO_PREDICT
+
+  for i, col in enumerate([RATIO_TO_PREDICT]):
+    if i == 0:
+      target = np.array(data[col])
+      target = target.reshape((len(data[col]), 1))
+    else:
+      val = np.array(data[col])
+      val = val.reshape((len(data[col]), 1))
+      target = np.hstack([target, val])
+
+#    target = np.array(data[RATIO_TO_PREDICT])
+#    target = target.reshape((len(target), 1))
+  return df, target
+#
 #######################
 ####################### END FUNCTIONS
 #######################
@@ -77,21 +91,20 @@ test  = datascaled[int(n*0.95):]
 
 # LSTM MULTVARIATE
 
+#RATIO_TO_PREDICT = ["MP2.5", "MP10", "CO"]
 RATIO_TO_PREDICT = "CO"
+
 RATIO_SHIFT = 1
 
 X_train, y_train = preprocess(train)
 X_valid, y_valid = preprocess(valid)
 X_test,  y_test  = preprocess(test)
 
-#SEQ_LEN = 120  # how long of a preceeding sequence to collect for RNN
-#FUTURE_PERIOD_PREDICT = 3  # how far into the future are we trying to predict?
-# SQ 168, 72, 48, 24, 12
-# BT 256, 128, 64, 32, 16
-# %%
-for SEQ_LEN in [72]:
 
-   for BATCH_SIZE in [32]:
+# %%
+for SEQ_LEN in [120, 60, 30]:
+
+   for BATCH_SIZE in [128, 64, 32, 16]:
 
       NAME = f"TARGET-{RATIO_TO_PREDICT}_SEQ-{SEQ_LEN}_BATCH_SIZE-{BATCH_SIZE}_SHIFT-{RATIO_SHIFT}_{int(time.time())}"
 
@@ -106,8 +119,8 @@ for SEQ_LEN in [72]:
       gen_test  = TimeseriesGenerator(X_test, y_test, SEQ_LEN, sampling_rate=1, batch_size=BATCH_SIZE, shuffle=False)
 
       for i in range(len(gen_train)):
-          x, y = gen_train[i]
-          print('SHAPE %s => %s' % (x.shape[1:], y.shape));break
+          x, y = gen_train[i];break
+#          print('SHAPE %s => %s' % (x.shape[1:], y.shape));break
 #          print('%s => %s' % (x, y));break
       
       #######################
@@ -121,7 +134,7 @@ for SEQ_LEN in [72]:
 
 
 
-      EPOCHS = 2  # how many passes through our data
+      EPOCHS = 20  # how many passes through our data
  
       model = Sequential()
       model.add(LSTM(128, input_shape=(x.shape[1:]), return_sequences=True))
@@ -136,14 +149,14 @@ for SEQ_LEN in [72]:
       model.add(Dropout(0.2))
       model.add(BatchNormalization())
 
-      model.add(Dense(32, activation='relu'))
+      model.add(Dense(64, activation='linear'))
       model.add(Dropout(0.2))
 
-      model.add(Dense(1, activation='relu'))
+      model.add(Dense(64, activation='linear'))
 
 
       opt = tf.keras.optimizers.Adam(lr=0.001, decay=1e-6)
-      callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=5)
+      callback = tf.keras.callbacks.EarlyStopping(monitor='val_root_mean_squared_error', patience=5)
 
       # Compile model
       model.compile(
@@ -155,7 +168,7 @@ for SEQ_LEN in [72]:
 
       tensorboard = TensorBoard(log_dir=f"../logs/{NAME}")
       filepath = f"RNN_PRED-{RATIO_TO_PREDICT}_BATCH_SIZE-{BATCH_SIZE}_SEQ-{SEQ_LEN}_SHIFT-{RATIO_SHIFT}_"+"Final-{epoch:02d}_RMSE-{root_mean_squared_error:.3f}"  # unique file name that will include the epoch and the validation acc for that epoch
-      checkpoint = ModelCheckpoint("../models/{}.model".format(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='min')) # saves only the best ones
+      checkpoint = ModelCheckpoint("../models/epochs/{}.model".format(filepath, monitor='val_root_mean_squared_error', verbose=1, save_best_only=True, mode='min')) # saves only the best ones
 
       history = model.fit(
           gen_train,
@@ -163,6 +176,8 @@ for SEQ_LEN in [72]:
           epochs=EPOCHS,
           validation_data=gen_valid,
           callbacks=[tensorboard, checkpoint, callback])
+
+ # %%
       # Score model
       score = model.evaluate(gen_test, verbose=1)
       #print(f'Test loss:', score[0])
@@ -170,21 +185,5 @@ for SEQ_LEN in [72]:
       print(f"\n RESULTADO SEQ_LEN: {SEQ_LEN}, BATCH_SIZE: {BATCH_SIZE}, TARGET: {RATIO_TO_PREDICT}, TEST_LOSS: {score[0]}, TEST_RMSE: {score[1]}")
 
       # Save model
-      #model.save(f"../datain/models/{NAME}")
-# %%
-# VERSAO COM BATCH_SIZE = 1 BEST
-predict = []
-real    = []
-best = pd.DataFrame()
-#
-i = 0
-while i < (len(gen_test)-1):
-    pred = model.predict(gen_test[i][0], verbose=0, batch_size=BATCH_SIZE, use_multiprocessing=True, workers=24)
-    for j, val in enumerate(pred):
-        predict.append(val[0])
-        real.append(gen_test[i][1][j][0])
-    i = i + 1
-best['Real'] = real
-best['Predict'] = predict
-best[['Predict','Real']].plot(figsize=(10,10))
-# %%
+      model.save(f"../models/final/{NAME}")
+
