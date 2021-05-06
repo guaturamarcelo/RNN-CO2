@@ -188,7 +188,6 @@ for SEQ_LEN in [72]:
       # Save model
       model.save(f"../models/final/{NAME}")
 # %%
-# VERSAO COM BATCH_SIZE = 1 BEST
 predict = []
 real    = []
 best = pd.DataFrame()
