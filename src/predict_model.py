@@ -117,7 +117,8 @@ gen_test  = TimeseriesGenerator(X_test, y_test, SEQ_LEN, sampling_rate=1, batch_
 # LOAD MODEL
 
 # BEST
-best_model = tf.keras.models.load_model(f"models/epochs/RNN_PRED-{RATIO_TO_PREDICT}_BATCH_SIZE-{BATCH_SIZE}_SEQ-{SEQ_LEN}_SHIFT-{RATIO_SHIFT}_Final-09_RMSE-0.087.model")
+best_model = tf.keras.models.load_model("../models/final/TARGET-CO_SEQ-72_BATCH_SIZE-64_SHIFT-1_1620214908")
+#best_model = tf.keras.models.load_model('../models/epochs/RNN_PRED-CO_BATCH_SIZE-64_SEQ-72_SHIFT-1_Final-09_RMSE-0.087.model')
 # WORST
 #worst_model = tf.keras.models.load_model(f"training_datas/BKP/models/RNN_Final-10_RMSE-0.075.model")
 # %%
